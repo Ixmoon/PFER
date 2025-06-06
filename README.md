@@ -78,13 +78,11 @@
 
 为了确保“重建项目”功能能够正确工作，输入的文本必须遵循以下格式：
 
-```markdown
 ```language
 # relative/path/to/your/file.ext
 The exact content of your file goes here.
 Make sure the path comment starts with '#' and is on the first line after the language identifier.
 The relative path should use '/' as the separator.
-```
 ```
 
 *   `language`: 是文件的语言标识符（例如 `python`, `javascript`, `html`），由后缀映射决定。
@@ -182,13 +180,11 @@ This tool primarily addresses challenges encountered in the following scenarios:
 
 To ensure the "Reconstruct Project" feature works correctly, the input text must adhere to the following format:
 
-```markdown
 ```language
 # relative/path/to/your/file.ext
 The exact content of your file goes here.
 Make sure the path comment starts with '#' and is on the first line after the language identifier.
 The relative path should use '/' as the separator.
-```
 ```
 
 *   `language`: The language identifier for the file (e.g., `python`, `javascript`, `html`), determined by the suffix mapping.
