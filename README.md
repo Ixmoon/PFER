@@ -85,6 +85,7 @@ The exact content of your file goes here.
 Make sure the path comment starts with '#' and is on the first line after the language identifier.
 The relative path should use '/' as the separator.
 ```
+```
 
 *   `language`: 是文件的语言标识符（例如 `python`, `javascript`, `html`），由后缀映射决定。
 *   `# relative/path/to/your/file.ext`: 是文件相对于项目源目录的路径，必须以 `#` 开头，并紧跟在语言标识符行的下一行。路径分隔符应为 `/`。
@@ -187,6 +188,7 @@ To ensure the "Reconstruct Project" feature works correctly, the input text must
 The exact content of your file goes here.
 Make sure the path comment starts with '#' and is on the first line after the language identifier.
 The relative path should use '/' as the separator.
+```
 ```
 
 *   `language`: The language identifier for the file (e.g., `python`, `javascript`, `html`), determined by the suffix mapping.
