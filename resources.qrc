@@ -1,0 +1,23 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+<qresource prefix="/icons">
+    <file alias="app-icon.svg">icons/app-icon.svg</file>
+    <file alias="browse-folder.svg">icons/browse-folder.svg</file>
+    <file alias="build.svg">icons/build.svg</file>
+    <file alias="clear-all.svg">icons/clear-all.svg</file>
+    <file alias="clipboard.svg">icons/clipboard.svg</file>
+    <file alias="config.svg">icons/config.svg</file>
+    <file alias="css.svg">icons/css.svg</file>
+    <file alias="edit.svg">icons/edit.svg</file>
+    <file alias="file-generic.svg">icons/file-generic.svg</file>
+    <file alias="html.svg">icons/html.svg</file>
+    <file alias="js.svg">icons/js.svg</file>
+    <file alias="json.svg">icons/json.svg</file>
+    <file alias="pack.svg">icons/pack.svg</file>
+    <file alias="parse.svg">icons/parse.svg</file>
+    <file alias="python.svg">icons/python.svg</file>
+    <file alias="reset.svg">icons/reset.svg</file>
+    <file alias="save.svg">icons/save.svg</file>
+    <file alias="text.svg">icons/text.svg</file>
+</qresource>
+</RCC>

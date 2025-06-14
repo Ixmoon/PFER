@@ -1,0 +1,78 @@
+{
+    "suffix_map": {
+        ".py": {
+            "language": "python",
+            "comment": "#"
+        },
+        ".js": {
+            "language": "javascript",
+            "comment": "//"
+        },
+        ".ts": {
+            "language": "typescript",
+            "comment": "//"
+        },
+        ".html": {
+            "language": "html",
+            "comment": "<!--"
+        },
+        ".css": {
+            "language": "css",
+            "comment": "/*"
+        },
+        ".scss": {
+            "language": "scss",
+            "comment": "//"
+        },
+        ".json": {
+            "language": "json",
+            "comment": ""
+        },
+        ".md": {
+            "language": "markdown",
+            "comment": ""
+        },
+        ".java": {
+            "language": "java",
+            "comment": "//"
+        },
+        ".cs": {
+            "language": "csharp",
+            "comment": "//"
+        },
+        ".cpp": {
+            "language": "cpp",
+            "comment": "//"
+        },
+        ".h": {
+            "language": "cpp",
+            "comment": "//"
+        },
+        ".xml": {
+            "language": "xml",
+            "comment": "<!--"
+        },
+        ".yaml": {
+            "language": "yaml",
+            "comment": "#"
+        },
+        ".sh": {
+            "language": "bash",
+            "comment": "#"
+        },
+        ".ini": {
+            "language": "ini",
+            "comment": ";"
+        },
+        ".txt": {
+            "language": "text",
+            "comment": "#"
+        }
+    },
+    "exclude_patterns": "*.log, *.tmp, build/, dist/, venv/, .git/, .vscode/, __pycache__/",
+    "selected_suffixes": [
+        ".json",
+        ".py"
+    ],
+    "window_geometry": "AdnQywADAAAAAABkAAAARQAABj8AAAO1AAAAZAAAAGQAAAY/AAADtQAAAAAAAAAACgAAAABkAAAAZAAABj8AAAO1"
+}
