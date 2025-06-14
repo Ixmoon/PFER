@@ -70,9 +70,7 @@
         }
     },
     "exclude_patterns": "*.log, *.tmp, build/, dist/, venv/, .git/, .vscode/, __pycache__/",
-    "selected_suffixes": [
-        ".json",
-        ".py"
-    ],
-    "window_geometry": "AdnQywADAAAAAABkAAAARQAABj8AAAO1AAAAZAAAAGQAAAY/AAADtQAAAAAAAAAACgAAAABkAAAAZAAABj8AAAO1"
+    "selected_suffixes": [],
+    "window_geometry": "AdnQywADAAAAAABkAAAARQAABj8AAAO1AAAAZAAAAGQAAAY/AAADtQAAAAAAAAAACgAAAABkAAAAZAAABj8AAAO1",
+    "splitter_state": "AAAA/wAAAAEAAAACAAACsQAAAZAB/////wEAAAABAA=="
 }

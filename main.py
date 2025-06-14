@@ -51,7 +51,7 @@ PATH_COMMENT_PATTERN = re.compile(r"^\s*(?:<!--\s*)?([#|//|;]+)?\s*(\S+)(?:\s*--
 INVALID_PATH_CHARS_PATTERN = re.compile(r'[<>:"|?*]')
 
 # 默认配置文件名
-CONFIG_FILE_NAME = "ProjectPacker_v2_config.json"
+CONFIG_FILE_NAME = "config.json"
 
 # 默认后缀映射表
 DEFAULT_SUFFIX_MAP = {
@@ -280,7 +280,7 @@ class ProjectPackerTool(QMainWindow):
 		left_layout.addWidget(self.tabs)
 		
 		# 中间和右侧
-		center_and_right_splitter = QSplitter(Qt.Orientation.Horizontal)
+		self.center_and_right_splitter = QSplitter(Qt.Orientation.Horizontal)
 		
 		# 中间: 文件树
 		tree_group = QGroupBox("项目文件 (可拖拽排序)")
@@ -315,12 +315,12 @@ class ProjectPackerTool(QMainWindow):
 		text_layout.addWidget(self.text_area)
 
 		# 组装
-		center_and_right_splitter.addWidget(tree_group)
-		center_and_right_splitter.addWidget(text_group)
-		center_and_right_splitter.setSizes([450, 650])
+		self.center_and_right_splitter.addWidget(tree_group)
+		self.center_and_right_splitter.addWidget(text_group)
+		self.center_and_right_splitter.setSizes([450, 650])
 
 		main_layout.addWidget(left_panel)
-		main_layout.addWidget(center_and_right_splitter)
+		main_layout.addWidget(self.center_and_right_splitter)
 
 	def _create_pack_tab(self, tab):
 		layout = QVBoxLayout(tab)
@@ -462,6 +462,7 @@ class ProjectPackerTool(QMainWindow):
 			self.config['exclude_patterns'] = self.exclude_edit.text()
 			self.config['selected_suffixes'] = self._get_selected_suffixes()
 			self.config['window_geometry'] = self.saveGeometry().toBase64().data().decode('ascii')
+			self.config['splitter_state'] = self.center_and_right_splitter.saveState().toBase64().data().decode('ascii')
 			with open(self.config_file_path, 'w', encoding='utf-8') as f:
 				json.dump(self.config, f, indent=4, ensure_ascii=False)
 			logging.info("配置已保存。")
@@ -477,7 +478,8 @@ class ProjectPackerTool(QMainWindow):
 			'suffix_map': DEFAULT_SUFFIX_MAP.copy(),
 			'exclude_patterns': "*.log, *.tmp, build/, dist/, venv/, .git/, .vscode/, __pycache__/",
 			'selected_suffixes': list(DEFAULT_SUFFIX_MAP.keys()),
-			'window_geometry': None
+			'window_geometry': None,
+			'splitter_state': None
 		}
 		if save:
 			self._save_config()
@@ -491,6 +493,10 @@ class ProjectPackerTool(QMainWindow):
 		geometry_b64 = self.config.get('window_geometry')
 		if geometry_b64:
 			self.restoreGeometry(QByteArray.fromBase64(geometry_b64.encode('ascii')))
+		
+		splitter_state_b64 = self.config.get('splitter_state')
+		if splitter_state_b64:
+			self.center_and_right_splitter.restoreState(QByteArray.fromBase64(splitter_state_b64.encode('ascii')))
 			
 		self._update_suffix_map_display()
 		self._update_suffix_checklist()
