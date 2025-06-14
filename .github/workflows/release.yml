@@ -1,0 +1,61 @@
+# .github/workflows/release.yml
+
+name: Build and Release
+
+# 触发条件：当一个以 "v" 开头的标签被推送到仓库时
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    # 运行环境：使用最新的 Windows 服务器
+    runs-on: windows-latest
+
+    steps:
+      # 步骤 1: 检出代码
+      # 拉取你的仓库代码到服务器上
+      - name: Check out a copy of your repository
+        uses: actions/checkout@v4
+
+      # 步骤 2: 设置 Python 环境
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11' # 你可以根据需要指定版本
+
+      # 步骤 3: 安装依赖
+      # 安装 requirements.txt 中列出的库和 PyInstaller
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      # 步骤 4: 打包应用程序
+      # 运行我们之前用过的 PyInstaller 命令
+      - name: Build with PyInstaller
+        run: pyinstaller --noconfirm --onefile --windowed --name "ProjectPackerTool" main.py
+
+      # 步骤 5: 准备发布包
+      # 将EXE和配置文件打包成一个zip文件，方便用户下载
+      - name: Package release assets
+        run: |
+          $release_dir = "ProjectPackerTool-Release"
+          mkdir $release_dir
+          cp dist/ProjectPackerTool.exe $release_dir/
+          cp config.json $release_dir/
+          cp style.qss $release_dir/
+          Compress-Archive -Path $release_dir -DestinationPath "ProjectPackerTool-Release.zip"
+        shell: pwsh
+
+      # 步骤 6: 创建 Release
+      # 自动创建 GitHub Release，并上传 zip 包
+      - name: Create Release and Upload Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          # 从标签名自动生成 Release 的标题和内容
+          generate_release_notes: true
+          files: |
+            ProjectPackerTool-Release.zip

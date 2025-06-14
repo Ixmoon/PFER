@@ -34,8 +34,24 @@ except ImportError:
 	sys.exit(1)
 
 
-# --- 1. 常量与核心数据结构 ---
-
+# --- 1. 辅助函数 ---
+ 
+def get_resource_path(relative_path: str) -> str:
+    """
+    获取资源的绝对路径，兼容源码运行和PyInstaller打包两种情况。
+    对于PyInstaller的单文件（--onefile）模式，它会查找.exe文件所在的目录。
+    """
+    if getattr(sys, 'frozen', False):
+        # 打包后的路径
+        base_path = os.path.dirname(sys.executable)
+    else:
+        # 源码运行的路径
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+ 
+ 
+# --- 2. 常量与核心数据结构 ---
+ 
 @dataclass
 class FileInfo:
 	"""使用 dataclass 定义文件信息，保持数据清晰"""
@@ -232,7 +248,7 @@ class ProjectPackerTool(QMainWindow):
 
 		self.file_data: List[FileInfo] = []
 		self.config: Dict[str, any] = {}
-		self.config_file_path = CONFIG_FILE_NAME
+		self.config_file_path = get_resource_path(CONFIG_FILE_NAME)
 		self._block_signals = False
 		self.worker: Optional[Worker] = None
 		self.progress_dialog: Optional[QProgressDialog] = None
@@ -954,7 +970,8 @@ class ProjectPackerTool(QMainWindow):
 	def _apply_styles(self):
 		"""从外部文件加载并应用QSS样式表"""
 		try:
-			with open('style.qss', 'r', encoding='utf-8') as f:
+			style_path = get_resource_path('style.qss')
+			with open(style_path, 'r', encoding='utf-8') as f:
 				style_sheet = f.read()
 			self.setStyleSheet(style_sheet)
 		except FileNotFoundError:

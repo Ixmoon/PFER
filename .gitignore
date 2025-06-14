@@ -1,2 +1,6 @@
 /buildGUi_config.json
 /__pycache__
+# PyInstaller files
+/build/
+/dist/
+*.spec
