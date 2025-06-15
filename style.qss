@@ -75,10 +75,6 @@ QListWidget::item:selected, QTreeView::item:selected {
 	color: white;
 }
 
-QTreeView::branch {
-	background: transparent;
-}
-
 QPushButton {
 	background-color: #343945;
 	border: 1px solid #444955;

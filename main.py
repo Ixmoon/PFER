@@ -16,11 +16,11 @@ from dataclasses import dataclass, field
 
 from PySide6.QtWidgets import (
 	QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-	QPushButton, QLineEdit, QTextEdit, QFileDialog, QLabel,
+	QPushButton, QLineEdit, QTextEdit, QFileDialog, QLabel, QMenu,
 	QMessageBox, QStatusBar, QGroupBox, QSplitter, QProgressDialog,
 	QTreeWidget, QTreeWidgetItem, QHeaderView, QDialog, QTableWidget,
 	QTableWidgetItem, QDialogButtonBox, QAbstractItemView, QTabWidget,
-	QListWidget, QListWidgetItem, QTreeWidgetItemIterator
+	QTreeWidgetItemIterator, QScrollArea, QCheckBox, QGridLayout
 )
 from PySide6.QtGui import QIcon, QTextCursor, QFont
 from PySide6.QtCore import Qt, QTimer, Signal, QThread, QByteArray, Slot
@@ -120,6 +120,7 @@ class ProjectTreeWidget(QTreeWidget):
 		# 当内部模型中的行被移动时（例如，通过拖放），发射 order_changed 信号
 		# 当内部模型中的行被移动时（例如，通过拖放），发射 order_changed 信号
 		# self.model().rowsMoved.connect(self.order_changed.emit) # 此方法不处理跨文件夹移动，已被下面的 dropEvent 替代
+		self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
 
 	def dropEvent(self, event):
 		"""重写拖放事件，仅在操作后发射信号，将数据处理逻辑交给主窗口"""
@@ -255,6 +256,7 @@ class ProjectPackerTool(QMainWindow):
 		self._block_signals = False
 		self.worker: Optional[Worker] = None
 		self.progress_dialog: Optional[QProgressDialog] = None
+		self.suffix_checkboxes: List[QCheckBox] = []
 		
 		self._load_config()
 		self._init_ui()
@@ -307,6 +309,7 @@ class ProjectPackerTool(QMainWindow):
 		self.file_tree = ProjectTreeWidget()
 		self.file_tree.setHeaderLabels(["文件路径"])
 		self.file_tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+		self.file_tree.setAnimated(True) # 为展开/折叠添加动画
 		tree_layout.addWidget(self.file_tree)
 		
 		# 右侧: 文本预览/编辑区
@@ -355,9 +358,20 @@ class ProjectPackerTool(QMainWindow):
 
 		# 2. 文件类型
 		layout.addWidget(QLabel("2. 选择要打包的文件类型:"))
-		self.suffix_checklist = QListWidget()
-		self.suffix_checklist.setSpacing(2)
-		layout.addWidget(self.suffix_checklist)
+		# 使用QScrollArea + QGridLayout 替代 QListWidget，以实现真正的自适应网格布局
+		self.suffix_scroll_area = QScrollArea()
+		self.suffix_scroll_area.setWidgetResizable(True)
+		# 移除边框，使其与背景融为一体
+		self.suffix_scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
+		self.suffix_scroll_area.setStyleSheet("QScrollArea { background: transparent; }")
+
+		scroll_content = QWidget()
+		self.suffix_grid_layout = QGridLayout(scroll_content)
+		self.suffix_grid_layout.setSpacing(10)
+		self.suffix_grid_layout.setContentsMargins(5, 5, 5, 5)
+
+		self.suffix_scroll_area.setWidget(scroll_content)
+		layout.addWidget(self.suffix_scroll_area)
 		
 		checklist_btn_layout = QHBoxLayout()
 		self.select_all_btn = QPushButton("全选")
@@ -433,11 +447,10 @@ class ProjectPackerTool(QMainWindow):
 		self.output_dir_edit.textChanged.connect(self._update_button_states)
 		self.text_area.textChanged.connect(self._update_button_states)
 		self.exclude_edit.textChanged.connect(self._trigger_save_config)
-		self.suffix_checklist.itemChanged.connect(self._on_suffix_selection_changed)
-		
 		# 树视图
 		self.file_tree.order_changed.connect(self._on_file_order_changed)
 		self.file_tree.itemSelectionChanged.connect(self._highlight_text_for_selection)
+		self.file_tree.customContextMenuRequested.connect(self._show_tree_context_menu)
 		
 		# 添加Tooltips
 		self._add_tooltips()
@@ -445,7 +458,7 @@ class ProjectPackerTool(QMainWindow):
 	def _add_tooltips(self):
 		self.source_dir_edit.setToolTip("选择或输入你的项目根文件夹路径。")
 		self.browse_source_btn.setToolTip("浏览文件夹")
-		self.suffix_checklist.setToolTip("勾选需要打包进结果的文件扩展名。")
+		self.suffix_scroll_area.setToolTip("勾选需要打包进结果的文件扩展名。")
 		self.exclude_edit.setToolTip("输入要排除的文件或文件夹，用逗号或换行分隔。\n支持.gitignore风格的通配符，例如:\n.git/, build/, *.log, !important.log")
 		self.extract_btn.setToolTip("从源目录中查找、读取并打包文件。")
 		self.output_dir_edit.setToolTip("指定一个文件夹用于存放重建后的项目文件。")
@@ -516,7 +529,7 @@ class ProjectPackerTool(QMainWindow):
 			self.center_and_right_splitter.restoreState(QByteArray.fromBase64(splitter_state_b64.encode('ascii')))
 			
 		self._update_suffix_map_display()
-		self._update_suffix_checklist()
+		self._update_suffix_checkboxes()
 		self._block_signals = False
 
 	def _update_data_from_ui(self):
@@ -531,17 +544,33 @@ class ProjectPackerTool(QMainWindow):
 		]
 		self.suffix_map_display.setPlainText("\n".join(display_text))
 
-	def _update_suffix_checklist(self):
-		self.suffix_checklist.clear()
+	def _update_suffix_checkboxes(self):
+		"""根据配置动态创建和布局文件类型复选框"""
+		# 清理旧的复选框
+		while self.suffix_grid_layout.count():
+			item = self.suffix_grid_layout.takeAt(0)
+			widget = item.widget()
+			if widget:
+				widget.deleteLater()
+		self.suffix_checkboxes.clear()
+
 		all_suffixes = sorted(self.config['suffix_map'].keys())
 		selected_suffixes = self.config.get('selected_suffixes', [])
-		
-		for suffix in all_suffixes:
-			item = QListWidgetItem(suffix)
-			item.setIcon(self._get_icon_for_file(suffix))
-			item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-			item.setCheckState(Qt.CheckState.Checked if suffix in selected_suffixes else Qt.CheckState.Unchecked)
-			self.suffix_checklist.addItem(item)
+
+		# 固定为4列，让其自动填充宽度
+		num_cols = 4
+
+		for i, suffix in enumerate(all_suffixes):
+			checkbox = QCheckBox(suffix)
+			checkbox.setChecked(suffix in selected_suffixes)
+			checkbox.stateChanged.connect(self._on_suffix_selection_changed)
+
+			row, col = divmod(i, num_cols)
+			self.suffix_grid_layout.addWidget(checkbox, row, col)
+			self.suffix_checkboxes.append(checkbox)
+
+		# 添加一个垂直的伸缩项，确保所有复选框都向上对齐
+		self.suffix_grid_layout.setRowStretch(len(all_suffixes) // num_cols + 1, 1)
 	
 	# --- 核心逻辑 (多线程改造) ---
 	def _run_extraction(self):
@@ -757,9 +786,9 @@ class ProjectPackerTool(QMainWindow):
 					new_rel_path = os.path.join(new_dir, filename).replace(os.sep, '/')
 					file_info.rel_path = new_rel_path
 					
-					# 更新UI: 直接更新第一列的文本为新的完整路径
-					item.setText(0, new_rel_path)
-					item.setToolTip(0, f"路径: {file_info.rel_path}\n语言: {file_info.language}")
+					# 更新UI: 第一列只显示文件名，完整路径在Tooltip中
+					item.setText(0, filename)
+					item.setToolTip(0, f"路径: {new_rel_path}\n语言: {file_info.language}")
 
 				new_file_data.append(file_info)
 			iterator += 1
@@ -797,6 +826,63 @@ class ProjectPackerTool(QMainWindow):
 			self._update_ui_from_config()
 
 	# --- UI 辅助方法 (重要修改) ---
+
+	def _show_tree_context_menu(self, position):
+		"""在文件树上显示右键上下文菜单"""
+		menu = QMenu(self)
+		delete_action = menu.addAction(QIcon(":/icons/clear-all.svg"), "删除选中项")
+		
+		# 仅当有选中项时才启用删除操作
+		delete_action.setEnabled(bool(self.file_tree.selectedItems()))
+		
+		delete_action.triggered.connect(self._delete_selected_items)
+		
+		menu.exec(self.file_tree.viewport().mapToGlobal(position))
+
+	def _delete_selected_items(self):
+		"""删除在文件树中选中的所有项目（文件和文件夹）"""
+		selected_items = self.file_tree.selectedItems()
+		if not selected_items:
+			return
+
+		paths_to_remove = set()
+		desc_items = []
+
+		for item in selected_items:
+			is_folder = item.childCount() > 0
+			file_info = item.data(0, Qt.ItemDataRole.UserRole)
+			
+			if is_folder:
+				folder_path = item.text(0)
+				desc_items.append(f"文件夹 '{folder_path}'")
+				for i in range(item.childCount()):
+					child = item.child(i)
+					child_info = child.data(0, Qt.ItemDataRole.UserRole)
+					if child_info:
+						paths_to_remove.add(child_info.rel_path)
+			elif file_info:
+				# 确保不重复添加，因为父文件夹可能已被选中
+				if file_info.rel_path not in paths_to_remove:
+					desc_items.append(f"文件 '{file_info.rel_path}'")
+					paths_to_remove.add(file_info.rel_path)
+
+		if not paths_to_remove:
+			return
+
+		reply = QMessageBox.question(self, "确认删除",
+									 f"确定要删除以下 {len(desc_items)} 个项目吗？\n\n- " + "\n- ".join(sorted(list(desc_items))) + "\n\n此操作不可撤销。",
+									 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+									 QMessageBox.StandardButton.No)
+
+		if reply != QMessageBox.StandardButton.Yes:
+			return
+
+		# 根据要移除的路径更新 self.file_data
+		self.file_data = [info for info in self.file_data if info.rel_path not in paths_to_remove]
+
+		self._update_data_from_ui()
+		self.statusBar().showMessage(f"成功删除 {len(paths_to_remove)} 个文件。", 3000)
+		
 	def _populate_tree_widget(self):
 		"""根据 self.file_data 刷新文件树视图，支持文件夹层级"""
 		self.file_tree.clear()
@@ -818,13 +904,14 @@ class ProjectPackerTool(QMainWindow):
 				folder_items[display_dir] = folder_item
 
 			# 创建文件项
-			# 创建文件项，第一列直接使用完整相对路径
-			item = QTreeWidgetItem([file_info.rel_path])
-			item.setIcon(0, self._get_icon_for_file(file_info.rel_path))
+			# 创建文件项，第一列只显示文件名
+			filename = os.path.basename(file_info.rel_path)
+			item = QTreeWidgetItem([filename])
+			item.setIcon(0, self._get_icon_for_file(filename))
 			item.setData(0, Qt.ItemDataRole.UserRole, file_info)
 			item.setToolTip(0, f"路径: {file_info.rel_path}\n语言: {file_info.language}")
 			file_info.item_ref = item
-			# 文件项可拖动，但不能接收拖放，以防止文件成为容器
+			# 文件项可拖动，但不能接收拖放
 			item.setFlags(Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsDragEnabled | Qt.ItemFlag.ItemIsEnabled)
 			
 			folder_item.addChild(item)
@@ -835,19 +922,29 @@ class ProjectPackerTool(QMainWindow):
 		self.file_tree.resizeColumnToContents(0)
 
 	def _regenerate_combined_text(self):
-		"""根据 self.file_data 生成合并后的文本 (与原版相同)"""
+		"""根据 self.file_data 生成合并后的文本，并避免重复添加路径注释"""
 		blocks = []
 		for file_info in self.file_data:
+			content_to_write = file_info.content.strip()
+			
+			# 构造预期的注释行
+			expected_comment = ""
 			if "<!--" in file_info.comment_symbol:
-				comment_line = f"<!-- {file_info.rel_path} -->\n"
+				expected_comment = f"<!-- {file_info.rel_path} -->"
 			elif file_info.comment_symbol:
-				comment_line = f"{file_info.comment_symbol} {file_info.rel_path}\n"
-			else:
-				comment_line = ""
+				expected_comment = f"{file_info.comment_symbol} {file_info.rel_path}"
+
+			# 检查内容是否已经以该注释行开头。
+			# 如果是，则从内容中移除它，因为我们会在外面统一添加，以确保格式统一。
+			if expected_comment and content_to_write.startswith(expected_comment):
+				content_to_write = content_to_write[len(expected_comment):].lstrip()
+			
+			# 统一添加注释行（如果需要）
+			final_comment_line = f"{expected_comment}\n" if expected_comment else ""
 
 			block = (f"```{file_info.language}\n"
-					 f"{comment_line}"
-					 f"{file_info.content.strip()}\n"
+					 f"{final_comment_line}"
+					 f"{content_to_write}\n"
 					 "```\n")
 			blocks.append(block)
 		
@@ -938,14 +1035,16 @@ class ProjectPackerTool(QMainWindow):
 		self.statusBar().showMessage("已复制到剪切板。", 2000)
 
 	def _get_selected_suffixes(self) -> List[str]:
-		return [self.suffix_checklist.item(i).text() for i in range(self.suffix_checklist.count()) if self.suffix_checklist.item(i).checkState() == Qt.CheckState.Checked]
-	
+		"""获取所有被选中的后缀名"""
+		return [cb.text() for cb in self.suffix_checkboxes if cb.isChecked()]
+
 	def _set_all_suffixes_checked(self, checked: bool):
+		"""全选或全不选所有后缀"""
 		self._block_signals = True
-		state = Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked
-		for i in range(self.suffix_checklist.count()):
-			self.suffix_checklist.item(i).setCheckState(state)
+		for checkbox in self.suffix_checkboxes:
+			checkbox.setChecked(checked)
 		self._block_signals = False
+		# 手动触发一次更新，以保存配置
 		self._on_suffix_selection_changed()
 
 	def _parse_exclusions(self, exclude_str: str) -> List[str]:
