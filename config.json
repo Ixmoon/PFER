@@ -71,6 +71,6 @@
     },
     "exclude_patterns": "*.log, *.tmp, build/, dist/, venv/, .git/, .vscode/, __pycache__/",
     "selected_suffixes": [],
-    "window_geometry": "AdnQywADAAAAAAKrAAAAyAAACIYAAAQ4AAACqwAAAOcAAAiGAAAEOAAAAAAAAAAACgAAAAKrAAAA5wAACIYAAAQ4",
-    "splitter_state": "AAAA/wAAAAEAAAACAAABewAAAsYB/////wEAAAABAA=="
+    "window_geometry": "AdnQywADAAAAAAJfAAAAmgAACE4AAARWAAACXwAAALkAAAhOAAAEVgAAAAAAAAAACgAAAAJfAAAAuQAACE4AAARW",
+    "splitter_state": "AAAA/wAAAAEAAAACAAAA+gAAA0cB/////wEAAAABAA=="
 }

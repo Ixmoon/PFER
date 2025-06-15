@@ -20,10 +20,10 @@ from PySide6.QtWidgets import (
 	QMessageBox, QStatusBar, QGroupBox, QSplitter, QProgressDialog,
 	QTreeWidget, QTreeWidgetItem, QHeaderView, QDialog, QTableWidget,
 	QTableWidgetItem, QDialogButtonBox, QAbstractItemView, QTabWidget,
-	QListWidget, QListWidgetItem
+	QListWidget, QListWidgetItem, QTreeWidgetItemIterator
 )
 from PySide6.QtGui import QIcon, QTextCursor, QFont
-from PySide6.QtCore import Qt, QTimer, Signal, QThread, QByteArray
+from PySide6.QtCore import Qt, QTimer, Signal, QThread, QByteArray, Slot
 
 # 导入编译后的资源文件
 try:
@@ -112,16 +112,19 @@ class ProjectTreeWidget(QTreeWidget):
 	def __init__(self, parent=None):
 		super().__init__(parent)
 		self.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+		self.setDragDropOverwriteMode(False) # 禁止在项目上嵌套，强制始终为插入
 		self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
 		self.setDropIndicatorShown(True)
 		self.setDragEnabled(True)
 		self.setAlternatingRowColors(True) # 增加可读性
+		# 当内部模型中的行被移动时（例如，通过拖放），发射 order_changed 信号
+		# 当内部模型中的行被移动时（例如，通过拖放），发射 order_changed 信号
+		# self.model().rowsMoved.connect(self.order_changed.emit) # 此方法不处理跨文件夹移动，已被下面的 dropEvent 替代
 
 	def dropEvent(self, event):
-		"""重写拖放事件，在操作完成后发射信号"""
+		"""重写拖放事件，仅在操作后发射信号，将数据处理逻辑交给主窗口"""
 		super().dropEvent(event)
-		if event.source() == self and event.dropAction() == Qt.DropAction.MoveAction:
-			self.order_changed.emit()
+		self.order_changed.emit()
 
 class SuffixMapEditorDialog(QDialog):
 	"""用于编辑后缀、语言和注释映射的对话框"""
@@ -302,10 +305,8 @@ class ProjectPackerTool(QMainWindow):
 		tree_group = QGroupBox("项目文件 (可拖拽排序)")
 		tree_layout = QVBoxLayout(tree_group)
 		self.file_tree = ProjectTreeWidget()
-		self.file_tree.setHeaderLabels(["文件路径", "语言"])
+		self.file_tree.setHeaderLabels(["文件路径"])
 		self.file_tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-		self.file_tree.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
-		self.file_tree.setColumnWidth(1, 100)
 		tree_layout.addWidget(self.file_tree)
 		
 		# 右侧: 文本预览/编辑区
@@ -733,11 +734,39 @@ class ProjectPackerTool(QMainWindow):
 
 	# --- 事件处理与槽函数 (与原版相同) ---
 	def _on_file_order_changed(self):
-		new_order_data = [self.file_tree.topLevelItem(i).data(0, Qt.ItemDataRole.UserRole)
-						  for i in range(self.file_tree.topLevelItemCount())]
-		self.file_data = [info for info in new_order_data if info]
+		"""
+		当树中项目顺序或结构改变时，从树视图完全重建 self.file_data 列表。
+		这是确保数据模型与视图100%同步的关键。
+		"""
+		new_file_data = []
+		iterator = QTreeWidgetItemIterator(self.file_tree)
+		while iterator.value():
+			item = iterator.value()
+			# 只处理文件项（其 UserRole 数据是 FileInfo 对象）
+			data = item.data(0, Qt.ItemDataRole.UserRole)
+			if isinstance(data, FileInfo):
+				file_info = data
+				parent = item.parent()
+				if parent:
+					# 从父项获取新的目录路径
+					parent_path_text = parent.text(0)
+					new_dir = "" if parent_path_text == "(根目录)" else parent_path_text
+					
+					# 重新计算并更新相对路径
+					filename = os.path.basename(file_info.rel_path)
+					new_rel_path = os.path.join(new_dir, filename).replace(os.sep, '/')
+					file_info.rel_path = new_rel_path
+					
+					# 更新UI: 直接更新第一列的文本为新的完整路径
+					item.setText(0, new_rel_path)
+					item.setToolTip(0, f"路径: {file_info.rel_path}\n语言: {file_info.language}")
+
+				new_file_data.append(file_info)
+			iterator += 1
+
+		self.file_data = new_file_data
 		self._regenerate_combined_text()
-		self.statusBar().showMessage("文件顺序已更新。", 1500)
+		self.statusBar().showMessage("文件顺序和结构已更新。", 1500)
 
 	def _on_suffix_selection_changed(self):
 		if not self._block_signals:
@@ -769,16 +798,41 @@ class ProjectPackerTool(QMainWindow):
 
 	# --- UI 辅助方法 (重要修改) ---
 	def _populate_tree_widget(self):
-		"""根据 self.file_data 刷新文件树视图 (已更新)"""
+		"""根据 self.file_data 刷新文件树视图，支持文件夹层级"""
 		self.file_tree.clear()
+		folder_items = {}  # 存储文件夹QTreeWidgetItem的字典
+
 		for file_info in self.file_data:
-			# 增加了第二列“语言”
-			item = QTreeWidgetItem([file_info.rel_path, file_info.language])
+			dir_path = os.path.dirname(file_info.rel_path)
+			# 将根目录显示得更友好
+			display_dir = dir_path if dir_path else "(根目录)"
+
+			folder_item = folder_items.get(display_dir)
+			if not folder_item:
+				# 创建文件夹项
+				folder_item = QTreeWidgetItem([display_dir])
+				folder_item.setIcon(0, QIcon(":/icons/browse-folder.svg"))
+				# 允许文件夹接收拖放，但不允许成为其他项的子项
+				folder_item.setFlags(Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsDragEnabled | Qt.ItemFlag.ItemIsDropEnabled | Qt.ItemFlag.ItemIsEnabled)
+				self.file_tree.addTopLevelItem(folder_item)
+				folder_items[display_dir] = folder_item
+
+			# 创建文件项
+			# 创建文件项，第一列直接使用完整相对路径
+			item = QTreeWidgetItem([file_info.rel_path])
 			item.setIcon(0, self._get_icon_for_file(file_info.rel_path))
 			item.setData(0, Qt.ItemDataRole.UserRole, file_info)
 			item.setToolTip(0, f"路径: {file_info.rel_path}\n语言: {file_info.language}")
 			file_info.item_ref = item
-			self.file_tree.addTopLevelItem(item)
+			# 文件项可拖动，但不能接收拖放，以防止文件成为容器
+			item.setFlags(Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsDragEnabled | Qt.ItemFlag.ItemIsEnabled)
+			
+			folder_item.addChild(item)
+
+		# 默认展开所有文件夹以便查看
+		self.file_tree.expandAll()
+		# 调整列宽以适应内容
+		self.file_tree.resizeColumnToContents(0)
 
 	def _regenerate_combined_text(self):
 		"""根据 self.file_data 生成合并后的文本 (与原版相同)"""
@@ -815,12 +869,18 @@ class ProjectPackerTool(QMainWindow):
 		self.copy_to_clipboard_btn.setEnabled(has_text)
 		self.clear_all_btn.setEnabled(has_files_in_tree or has_text)
 
+	@Slot()
 	def _highlight_text_for_selection(self):
-		"""高亮显示选中文件对应的文本块 (与原版相同)"""
+		"""高亮显示选中文件对应的文本块"""
 		selected_items = self.file_tree.selectedItems()
 		if not selected_items: return
+
+		# 确保选中的是文件项（没有子项），而不是文件夹
+		item = selected_items[0]
+		if item.childCount() > 0:
+			return
 		
-		file_info = selected_items[0].data(0, Qt.ItemDataRole.UserRole)
+		file_info = item.data(0, Qt.ItemDataRole.UserRole)
 		if not file_info: return
 
 		search_str = f"```{file_info.language}"
